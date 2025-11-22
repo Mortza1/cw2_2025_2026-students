@@ -265,17 +265,20 @@ class NMT(nn.Module):
         # Need to compute batched matrix multiplication between dec_hidden and enc_hiddens_proj
         # dec_hidden has a shape of (b, h), enc_hiddens_proj is (b, src_len, h)
         # We want to end up with a shape of (b, src_len)
-        e_t = torch.bmm(dec_hidden.unsqueeze(1), enc_hiddens_proj.transpose(1, 2)).squeeze(1)  # final shape (b, src_len)
-
-        if enc_masks is not None:
-            # enc_masks: (b, src_len) with 1 for PAD positions
-            e_t = e_t.masked_fill(enc_masks.bool(), float("-inf"))
+        dec_hidden_row = dec_hidden.unsqueeze(1) # shape (b, 1, h)
+        enc_hiddens_proj_t = enc_hiddens_proj.transpose(1, 2) # shape (b, h, src_len)
+        e_t_row = torch.bmm(dec_hidden_row, enc_hiddens_proj_t)  # shape -> (b, 1, src_len)
+        e_t = e_t_row.squeeze(1)   # final shape -> (b, src_len)
 
 
         # If enc_masks is None, this step should be skipped
         # Use bool() to convert ByteTensor to BoolTensor
         # Use float("-inf") to represent -inf
         # Use masked_fill_ to fill in -inf at the masked positions
+        if enc_masks is not None:
+            pad_positions =  enc_masks.bool() # (b, src_len) 
+            e_t = e_t.masked_fill(pad_positions, float("-inf"))
+            # print(e_t)
 
         # 3. Apply softmax to e_t to yield alpha_t of shape (b, src_len)
         alpha_t = torch.softmax(e_t, dim=1)
@@ -283,7 +286,9 @@ class NMT(nn.Module):
         # 4. Use batched matrix multiplication between alpha_t and enc_hiddens
         # alpha_t has a shape of (b, src_len), enc_hiddens is (b, src_len, 2h)
         # We want to end up with a shape of (b, 2h)
-        attention_t = torch.bmm(alpha_t.unsqueeze(1), enc_hiddens).squeeze(1)   # (b, 2h)
+        alpha_t_row = alpha_t.unsqueeze(1)  # (b, 1, src_len)
+        weighted_context = torch.bmm(alpha_t_row, enc_hiddens)  # (b, 1, 2h)
+        attention_t = weighted_context.squeeze(1)  # (b, 2h)
 
         # 5. Concatenate dec_hidden with attention_t to compute tensor u_t
         u_t = torch.cat((dec_hidden, attention_t), dim=1)

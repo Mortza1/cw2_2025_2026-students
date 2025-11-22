@@ -124,7 +124,7 @@ class CausalSelfAttention(nn.Module):
         ### Your code here (~8-15 lines) ###
         # Step 1: Calculate query, key, values for all heads
         # (B, nh, T, hs)
-        q = self.query(x).view(B, T, self.n_head, C // self.n_head).transpose(1, 2)
+        q = self.query(x).view(B, T, self.n_head, C // self.n_head).transpose(1, 2) 
         k = self.key(x).view(B, T, self.n_head, C // self.n_head).transpose(1, 2)
         v = self.value(x).view(B, T, self.n_head, C // self.n_head).transpose(1, 2)
       
