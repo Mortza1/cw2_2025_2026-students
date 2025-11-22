@@ -122,23 +122,33 @@ class CausalSelfAttention(nn.Module):
         """
         B, T, C = x.size()
         ### Your code here (~8-15 lines) ###
-        raise NotImplementedError("Implement the forward method in CausalSelfAttention in model.py")
         # Step 1: Calculate query, key, values for all heads
         # (B, nh, T, hs)
+        q = self.query(x).view(B, T, self.n_head, C // self.n_head).transpose(1, 2)
+        k = self.key(x).view(B, T, self.n_head, C // self.n_head).transpose(1, 2)
+        v = self.value(x).view(B, T, self.n_head, C // self.n_head).transpose(1, 2)
       
         # Step 2: Compute attention scores
         # Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
+        att = (q @ k.transpose(-2, -1)) / math.sqrt(C // self.n_head)
 
         # Step 3: Masking out the future tokens (causal) and softmax
+        att = att.masked_fill(self.mask[:, :, :T, :T] == 0, float("-inf"))
+        att_softmax = F.softmax(att, dim=-1)
+        att_softmax = self.attn_drop(att_softmax)
 
         # Step 4: Compute the attention output
         # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+        y = att_softmax @ v
 
         # Step 5: re-assemble all head outputs side by side
         # (B, T, nh, hs) -> (B, T, C)
+        y = y.transpose(1, 2).contiguous().view(B, T, C)
 
         # Step 6: output projection + dropout
+        y = self.resid_drop(self.proj(y))
         ### End of your code ###
+        attention = att_softmax if output_attentions else None
         return GPTAttentionOutput(output=y, attentions=attention)
 
 
